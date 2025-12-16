@@ -229,19 +229,19 @@ A neutral 5th agent (shared, not team-affiliated) converts specs into generation
 ## Technical Architecture (Sketch)
 
 ```
-orchestrator.py
-├── challenge_generator.py    # Produces random challenges
-├── team.py                   # Manages agent ensemble
-│   ├── architect_agent.py
-│   ├── lorekeeper_agent.py
-│   ├── contrarian_agent.py
-│   └── synthesizer_agent.py
-├── deliberation_engine.py    # Enforces turn order, voting, constraints
-├── spec_extractor.py         # Converts transcript → structured spec
-├── prompt_engineer_agent.py  # Converts spec → image prompts
-├── generator.py              # Calls image gen API
-├── judge.py                  # Scoring interface
-└── transcript_logger.py      # Saves full deliberation record
+orchestrator/
+├── challenge_generator        # Produces random challenges
+├── team                       # Manages agent ensemble
+│   ├── architect_agent
+│   ├── lorekeeper_agent
+│   ├── contrarian_agent
+│   └── synthesizer_agent
+├── deliberation_engine        # Enforces turn order, voting, constraints
+├── spec_extractor             # Converts transcript → structured spec
+├── prompt_engineer_agent      # Converts spec → image prompts
+├── generator                  # Calls image gen API
+├── judge                      # Scoring interface
+└── transcript_logger          # Saves full deliberation record
 ```
 
 ### Agent Prompt Structure (Template)

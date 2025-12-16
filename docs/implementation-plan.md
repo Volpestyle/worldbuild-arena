@@ -1,21 +1,14 @@
-# Worldbuild Arena — pnpm Monorepo Implementation Plan
+# Worldbuild Arena — Monorepo Implementation Plan (Python backend + schema-first contracts)
 
-This plan translates `docs/spec.md` (product/game design) and `docs/tech.md` (agent/orchestrator approach) into a concrete **pnpm workspaces monorepo** build sequence, with a **mobile-first** web UI.
+This plan translates `docs/spec.md` (product/game design) and `docs/tech.md` (agent/orchestrator approach) into a concrete monorepo build sequence with a **Python orchestrator/API**, **schema-first contracts**, and a **mobile-first** web UI.
 
 ## Monorepo shape (pnpm workspaces)
 
-- `pnpm-workspace.yaml` → `apps/*`, `packages/*`
+- `pnpm-workspace.yaml` → `apps/web`, `packages/*` (TypeScript-only)
 - Suggested layout:
   - `apps/web` — React + TypeScript UI (mobile-first) with `@react-three/fiber` + `framer-motion`
-  - `apps/api` — match orchestrator API (Node/TS) + SSE stream
-  - `packages/contracts` — shared types + JSON Schemas (`Canon`, `TurnOutput`, `MatchEvent`, `PromptPack`)
-  - `packages/engine` — deterministic `DeliberationEngine` FSM + validators + canon store + transcript event log
-  - `packages/llm-core` — provider-agnostic `LLMClient` interface + shared request/response types + structured-output helpers
-  - `packages/llm-openai` — OpenAI adapter implementing `LLMClient` (optional first implementation)
-  - `packages/llm-anthropic` — Anthropic adapter implementing `LLMClient` (optional)
-  - `packages/artifacts` — PromptEngineer + image generation + storage interface
-  - `packages/image-core` — provider-agnostic `ImageClient` interface (optional; keep in `packages/artifacts` if preferred)
-  - `packages/image-openai` — image adapter implementing `ImageClient` (optional)
+  - `apps/api` — match orchestrator API (**Python**) + SSE stream (Python project; not a pnpm package)
+  - `packages/contracts` — **JSON Schemas are the source of truth** + codegen for TS/Python (`Canon`, `TurnOutput`, `MatchEvent`, `PromptPack`)
   - `packages/ui` — shared HUD components + mobile layout primitives (optional)
   - `packages/config` — shared `tsconfig`, `eslint`, `prettier` (or keep these at repo root)
 
@@ -23,12 +16,12 @@ This plan translates `docs/spec.md` (product/game design) and `docs/tech.md` (ag
 
 ### 1) Repo scaffold
 
-- Root: pin `packageManager`, TS config, lint/format, `turbo.json` (or plain `pnpm -r`)
-- Root scripts: `dev`, `build`, `test`, `lint`, `typecheck` + filtered variants (e.g. `pnpm --filter web dev`)
+- Root: pin `packageManager`, TS config, lint/format, `turbo.json` (or plain `pnpm -r`) + Python toolchain (`pyproject.toml` in `apps/api`)
+- Root scripts: `dev`, `build`, `test` that run both toolchains (e.g. `pnpm --filter web dev` + `(cd apps/api && uvicorn worldbuild_api.main:app --reload)`)
 
 ### 2) Contracts first (unblocks everything)
 
-In `packages/contracts` define:
+In `packages/contracts` define **JSON Schemas** (single source of truth) for:
 
 - `Canon` schema (fields from `docs/spec.md` “Final Spec Structure”)
 - `TurnOutput` schema (role + `turn_type` + `content` + `canon_patch` + `references` + `vote`)
@@ -37,30 +30,39 @@ In `packages/contracts` define:
 
 Implementation notes:
 
-- Runtime validation: `ajv`
-- Patch format: RFC-6902 via `fast-json-patch` (or compatible)
+- Codegen: generate TS types for `apps/web` and Python models/types for `apps/api` from the same schemas (optional; runtime validation is still schema-driven)
+- Runtime validation: Python JSON Schema validator in `apps/api`; `ajv` in `apps/web` (and/or build-time validation in CI)
+- Patch format: RFC-6902 JSON Patch (Python implementation on server; client can treat as data or apply for replay/diff)
+
+Schema-first workflow:
+
+- Author schemas in `packages/contracts/schemas/*.schema.json`
+- Generate language bindings:
+  - TypeScript → `apps/web` (types + optional validators)
+  - Python → `apps/api` (Pydantic models/TypedDicts + helpers)
+- CI guardrails: schema lint/validation + “generated code is up to date” check
 
 ### 3) Provider abstraction (LLM + image)
 
-Define provider-neutral interfaces so `packages/engine` and `apps/api` never depend on a single AI vendor.
+Define provider-neutral interfaces so `apps/api` never depends on a single AI vendor.
 
-- `packages/llm-core`:
-  - `LLMClient` interface (sync/async) used by the orchestrator to request a strictly-typed `TurnOutput`
+- `apps/api`:
+  - `LLMClient` interface used by the orchestrator to request a strictly-typed `TurnOutput`
   - shared model config types (provider name, model id, temperature, token limits)
   - helpers for “structured outputs” + a standard repair loop contract (retry caps, error shape)
 - Provider adapters (examples):
-  - `packages/llm-openai` implements `LLMClient`
-  - `packages/llm-anthropic` implements `LLMClient`
+  - OpenAI adapter implements `LLMClient`
+  - Anthropic adapter implements `LLMClient`
 - Selection mechanism:
   - choose provider/model via env/config (`LLM_PROVIDER`, `LLM_MODEL`, etc.)
-  - wire via dependency injection in `apps/api` (not inside `packages/engine`)
+  - wire via dependency injection (not inside the engine core)
 - For image generation, mirror the same approach:
-  - keep the interface in `packages/image-core` (or within `packages/artifacts`)
-  - add `packages/image-*` adapters as needed
+  - define an `ImageClient` interface
+  - add provider-specific adapters as needed
 
 ### 4) Engine core (pure + deterministic)
 
-In `packages/engine` implement:
+In `apps/api` implement:
 
 - `challengeGenerator(seed, tier)` (Tier 1–3)
 - `DeliberationEngine` FSM implementing phases/round schedule from `docs/spec.md`
@@ -70,12 +72,13 @@ In `packages/engine` implement:
   - no consecutive proposals
   - Synthesizer traceability (`references` + amendments tied to referenced items)
   - phase write restrictions on canon paths
+- Voting rules from `docs/spec.md` (ACCEPT/AMEND/REJECT thresholds + Synthesizer deadlock tie-breaker; Phase 4 unanimous ratification)
 - Repair loop API (`validate → repairPrompt → revalidate`, capped retries)
 - Transcript as append-only `MatchEvent[]` + `canon_hash` before/after for deterministic replay
 
 ### 5) API app (runs matches + streams events)
 
-In `apps/api` (Fastify/Express):
+In `apps/api` (FastAPI/Starlette):
 
 - `POST /matches` (seed/tier/options) → starts match
 - `GET /matches/:id/events` (SSE) → streams `MatchEvent`s (also supports replay from an index)
@@ -107,7 +110,7 @@ Mobile specifics:
 
 ### 7) Artifacts + judging
 
-In `packages/artifacts` + `apps/api` endpoints:
+In `apps/api` + endpoints:
 
 - PromptEngineer runs on final validated canon only (fairness)
 - Generate/store 6 artifacts/team (or prompts-only MVP)
@@ -125,7 +128,8 @@ In `apps/web`:
 
 ## Open choices to confirm (affects plan details)
 
-- Backend: Node/TS (fits pnpm monorepo cleanly) vs Python orchestrator (would live alongside, not as a pnpm package)
+- API framework: FastAPI/Starlette vs something else + SSE implementation style
+- Schema codegen: how to generate TS + Python types/models from JSON Schema (tooling choice + where generated code lives)
 - Persistence: SQLite first vs Postgres from day 1
 - LLM provider(s) + models: pick a default adapter, but keep `LLMClient` provider-neutral
 - Image generation provider + storage (local files vs S3-compatible), ideally via an `ImageClient` adapter layer

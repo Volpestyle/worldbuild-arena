@@ -78,7 +78,8 @@ Use the structured transcript as the single driver of presentation:
 
 - **Interface**: JSON over HTTP + streaming updates (SSE recommended; WebSockets optional)
 - **Responsibilities**: run DeliberationEngine, validate/repair, apply canon patches, persist transcripts/artifacts
-- **Implementation**: can be either TypeScript/Node or Python (the orchestration + validation layer is where Python often feels especially ergonomic, but it’s not required)
+- **Contracts**: schema-first JSON Schema (generate Python/TS bindings; validate all agent outputs against the same schemas)
+- **Implementation**: Python (this repo’s default), but can be TypeScript/Node or Go if you keep contract/codegen parity
 
 ---
 
@@ -493,25 +494,26 @@ Implementation details:
 ## 13. Implementation skeleton (practical module boundaries)
 
 ```text
-src/
-  orchestrator/
-    match_runner.py
-    deliberation_engine.py   # FSM scheduler
-    validator.py             # schema + business rules
-    canon_store.py           # apply/verify patches
-    transcript_store.py      # event logging
-  agents/
-    agent_base.py            # build prompt + call model + parse
-    role_prompts.py          # versioned prompts/config
-    schemas.py               # JSON schema definitions
-  challenge/
-    generator.py             # seeded RNG + tiers
-  artifacts/
-    prompt_engineer.py       # neutral prompt pack generation
-    image_generator.py       # calls image model + stores results
-  judging/
-    blind_packager.py
-    judge_interface.py
+packages/contracts/
+  schemas/                   # JSON Schemas (source of truth)
+
+apps/api/                     # Python orchestrator API
+  pyproject.toml
+  src/worldbuild_api/
+    contracts/                # generated models (optional; schemas remain source of truth)
+    orchestrator/             # match runner + wiring
+    engine/                   # FSM scheduler
+    validator/                # schema + business rules + repair loop
+    canon/                    # apply/verify patches
+    transcript/               # event logging + persistence
+    agents/                   # role prompts/config + LLM invocation
+    challenge/                # seeded RNG + tiers
+    artifacts/                # prompt engineer + image generation
+    judging/                  # blind packaging + judge interface
+  tests/
+
+apps/web/                     # React/TS UI (event replay)
+  src/
 ```
 
 ---
