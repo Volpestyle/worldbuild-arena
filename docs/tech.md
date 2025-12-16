@@ -94,7 +94,7 @@ You do not need “long-running agent processes.” Each agent “retains identi
 - the same constraints
 - the same team transcript/canon state
 
-If you want server-managed memory, OpenAI’s Responses API supports persistent “Conversations,” where items from this conversation are prepended and input/output items are automatically added to that conversation.
+If you want server-managed memory, some LLM providers support persistent “conversations” / threads (for example, OpenAI Responses `conversations`). Treat this as an optional adapter feature — the orchestrator should still use your DB-backed transcript + canon as the source of truth.
 
 But for this spec (10-ish rounds, bounded scope), app-managed transcript + canon is simplest, deterministic, and easy to validate.
 
@@ -181,9 +181,9 @@ You need machine-checkable outputs to enforce:
 - Voting rules
 - Canon updates
 
-OpenAI supports Structured Outputs using a JSON Schema response format.
+Use structured outputs (JSON Schema) when your provider supports them; this is how you enforce rules without brittle text parsing.
 
-In the Responses API, structured output is configured under `text.format` (and supports a strict mode).
+Provider note: in OpenAI Responses, structured output is configured under `text.format` (and supports a strict mode).
 
 ### 4.2 Standard turn schema
 
@@ -252,13 +252,13 @@ Every call to the model should be constructed from deterministic parts.
    - current canon JSON snapshot
    - last N transcript events (or full transcript if small)
 
-### 5.2 Example Responses API call (conceptual)
+### 5.2 Example LLM API call (conceptual)
 
 (Exact field names vary by SDK version, but the structure is the same.)
 
-- Use `instructions` to inject role-level system guidance.
-- Configure output format using structured outputs (JSON schema) via `text.format`.
-- Limit tokens with `max_output_tokens`.
+- Provide role-level system guidance (e.g., `instructions` / system prompt, depending on SDK).
+- Configure structured output (JSON schema) using your provider’s mechanism (e.g., OpenAI `text.format`).
+- Limit tokens (`max_output_tokens` or provider equivalent).
 
 You can also attach metadata for traceability (`agent_id`, `match_id`, `team_id`).
 
@@ -399,7 +399,7 @@ Instead of “just logging text,” log structured events:
   "canon_after_hash": "sha256:...",
   "timestamp": "2025-12-14T18:22:11Z",
   "llm_metadata": {
-    "model": "gpt-4.1-mini",
+    "model": "provider:model-id",
     "response_id": "resp_...",
     "tokens_in": 1234,
     "tokens_out": 456
@@ -427,22 +427,22 @@ Benefits:
 - Pros: deterministic, portable, easy to test
 - Cons: more tokens per call
 
-### Option B: OpenAI Conversations per team or per agent
+### Option B: Provider-managed conversations per team or per agent
 
-OpenAI supports a Conversations API for durable state objects. Responses can belong to a conversation, where items are prepended and new items are added automatically.
+Some providers offer durable conversation/thread objects. For example, OpenAI Responses supports `conversations`, where items are prepended and new items are added automatically.
 
 If you do this:
 
-- Create `conversation_id` for each agent or each team.
-- Add each structured turn output as conversation items (or rely on Responses to write them).
+- Create a conversation/thread ID for each agent or each team (provider-specific; e.g., `conversation_id`).
+- Add each structured turn output as conversation items (or rely on the provider SDK to append them).
 - Still keep canon in your DB (don’t rely on the model’s memory as the source of truth).
 
-### Option C: Chain turns with `previous_response_id`
+### Option C: Provider request chaining (e.g., `previous_response_id`)
 
-This also exists, but note:
+Some APIs support chaining requests via a previous response ID (OpenAI: `previous_response_id`). If you do this, note:
 
-- instructions are not carried over when chaining with `previous_response_id` — you must resend them
-- you also can’t use conversation and `previous_response_id` together
+- in some APIs (e.g., OpenAI), instructions are not carried over when chaining — you must resend them
+- in some APIs (e.g., OpenAI), you can’t use conversation and chaining together
 
 Given your need for strict role behavior, Option A or B is typically cleaner.
 
