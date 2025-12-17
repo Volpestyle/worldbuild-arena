@@ -3,6 +3,7 @@ Worldbuilding Sprint: two teams of role-constrained LLM agents deliberate to pro
 
 - Design spec: `docs/spec.md`
 - Technical spec: `docs/tech.md`
+- Quickstart: `docs/quickstart.md`
 
 ## Dev
 
