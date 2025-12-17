@@ -592,3 +592,42 @@ apps/web/                     # React/TS UI (event replay)
 4. **Deterministic orchestration** beats "emergent coordination" (especially for fairness). Turn order is fixed by the FSM scheduler.
 5. **Neutral PromptEngineer** is a separate agent + schema, not a hand-edited step.
 6. **Optimize for token cost per provider.** OpenAI: response chaining. Anthropic: prompt caching. Gemini: context caching (planned). All reduce costs vs. naive resending.
+
+---
+
+## 15. Deployment (AWS)
+
+SQLite is the default for local/dev and a single-instance deployment. On AWS, this API is **not a good fit for Lambda-style serverless** today because it:
+
+- runs matches as in-process background tasks
+- serves long-lived **SSE** connections
+- uses an in-memory pub/sub hub for “live” events
+
+### 15.1 Low-traffic deployment (lowest cost, works with current code)
+
+If you expect very low traffic but want reliable live streaming, the simplest/cheapest option is usually:
+
+- **API compute**: a single small VM (Lightsail or EC2) running the FastAPI app behind Nginx (SSE-friendly).
+- **Persistence**: SQLite on local disk (EBS/Lightsail disk); `WBA_DB_PATH` points at that file.
+- **Web UI**: static build on S3 + CloudFront (or served from the same VM if you want fewer moving parts).
+
+This is not “scale to zero,” but it minimizes baseline cost and keeps the current in-memory streaming model working.
+
+### 15.2 Managed containers MVP (works with current code, higher baseline cost)
+
+- **API compute**: ECS Fargate (single task) behind an ALB (SSE-compatible).
+- **Persistence**: SQLite on an EFS mount; point `WBA_DB_PATH` at the mounted path (e.g. `/mnt/data/worldbuild.sqlite3`).
+- **Web UI**: static build on S3 + CloudFront.
+- **Config/secrets**: environment variables via Secrets Manager/SSM (LLM provider keys, model settings).
+- **Observability**: CloudWatch logs + metrics (ALB access logs optional).
+
+This keeps the architecture simple and avoids cross-instance streaming issues (the current `MatchHub` is in-memory).
+
+### 15.3 Scale-out / production path (planned)
+
+If/when you want multiple API replicas, higher write concurrency, or durable storage without a shared filesystem:
+
+- **Swap SQLite → Postgres** (RDS/Aurora) by adding a Postgres-backed event store implementation.
+- **Externalize streaming/pubsub** (e.g. ElastiCache/Redis pub/sub) so any API instance can serve live updates.
+- **Move match execution to workers** (SQS + ECS workers) so the HTTP API becomes mostly stateless.
+- **Store generated artifacts in S3**, keeping only metadata/refs in the database.

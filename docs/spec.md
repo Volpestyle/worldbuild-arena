@@ -269,3 +269,11 @@ Respond in character. Be concise but substantive.
 ```
 
 ---
+
+## Deployment (AWS) (Sketch)
+
+- **Web UI**: static site on S3 + CloudFront.
+- **API (very low traffic)**: single small VM (Lightsail/EC2) running FastAPI behind Nginx (SSE-friendly).
+- **API (managed containers)**: ECS Fargate behind an ALB (SSE-friendly, but higher baseline cost).
+- **Storage**: SQLite for local/dev; on AWS keep SQLite on local disk (single VM) or EFS (single Fargate task). Move to RDS Postgres for scale-out.
+- **Secrets/config**: Secrets Manager or SSM Parameter Store for LLM provider keys and environment configuration.

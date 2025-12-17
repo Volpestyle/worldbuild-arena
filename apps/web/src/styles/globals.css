@@ -1,0 +1,130 @@
+:root {
+  /* Role colors */
+  --color-architect: #4a90d9;
+  --color-lorekeeper: #9b59b6;
+  --color-contrarian: #e74c3c;
+  --color-synthesizer: #2ecc71;
+
+  /* UI colors */
+  --color-bg: #0a0a0f;
+  --color-bg-panel: #12121a;
+  --color-bg-elevated: #1a1a24;
+  --color-border: #2a2a3a;
+  --color-text: #f0f0f5;
+  --color-text-muted: #8888a0;
+  --color-accent: #6366f1;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Safe area insets */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safe area padding utility classes */
+.safe-top {
+  padding-top: max(var(--space-md), var(--safe-top));
+}
+
+.safe-bottom {
+  padding-bottom: max(var(--space-md), var(--safe-bottom));
+}
+
+.safe-left {
+  padding-left: max(var(--space-md), var(--safe-left));
+}
+
+.safe-right {
+  padding-right: max(var(--space-md), var(--safe-right));
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Button reset */
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Input reset */
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--space-sm) var(--space-md);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-accent);
+}
