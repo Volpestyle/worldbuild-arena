@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
 import jsonpatch
@@ -10,7 +10,7 @@ from worldbuild_api.engine.challenge import generate_challenge
 from worldbuild_api.engine.events import EngineEvent
 from worldbuild_api.engine.rules import PHASE_ROUNDS, allowed_patch_prefixes_for_phase
 from worldbuild_api.engine.validation import normalize_patch_key, validate_turn_output
-from worldbuild_api.providers.base import LLMClient, TurnContext
+from worldbuild_api.providers.base import ConversationHandle, LLMClient, TurnContext
 from worldbuild_api.types import Canon, Role, TeamId, TurnOutput, TurnType, VoteChoice
 from worldbuild_api.util import sha256_hex
 
@@ -24,6 +24,7 @@ class EngineConfig:
 class TeamState:
     team_id: TeamId
     canon: dict[str, Any]
+    conversation: ConversationHandle
     next_proposer: Role = "ARCHITECT"
     turn_counter: int = 0
 
@@ -38,8 +39,19 @@ class DeliberationEngine:
         yield EngineEvent(type="match_created", team_id=None, data={"seed": seed, "tier": tier})
         yield EngineEvent(type="challenge_revealed", team_id=None, data=challenge)
 
-        team_a = TeamState(team_id="A", canon=_initial_canon("A", challenge))
-        team_b = TeamState(team_id="B", canon=_initial_canon("B", challenge))
+        # Initialize conversations for each team (provider-managed state)
+        canon_a = _initial_canon("A", challenge)
+        canon_b = _initial_canon("B", challenge)
+
+        conv_a = await self._llm.start_conversation(
+            team_id="A", match_seed=seed, challenge=challenge, initial_canon=canon_a
+        )
+        conv_b = await self._llm.start_conversation(
+            team_id="B", match_seed=seed, challenge=challenge, initial_canon=canon_b
+        )
+
+        team_a = TeamState(team_id="A", canon=canon_a, conversation=conv_a)
+        team_b = TeamState(team_id="B", canon=canon_b, conversation=conv_b)
 
         for phase in (1, 2, 3, 4):
             round_count = PHASE_ROUNDS[phase]
@@ -49,10 +61,8 @@ class DeliberationEngine:
                 for team_state in (team_a, team_b):
                     async for event in self._run_team_round(
                         team_state=team_state,
-                        match_seed=seed,
                         phase=phase,
                         round_number=round_number,
-                        challenge=challenge,
                     ):
                         yield event
 
@@ -69,18 +79,14 @@ class DeliberationEngine:
         self,
         *,
         team_state: TeamState,
-        match_seed: int,
         phase: int,
         round_number: int,
-        challenge: dict[str, Any],
     ) -> AsyncIterator[EngineEvent]:
         if phase == 4:
             async for event in self._run_phase4_crystallization(
                 team_state=team_state,
-                match_seed=match_seed,
                 phase=phase,
                 round_number=round_number,
-                challenge=challenge,
             ):
                 yield event
             return
@@ -91,12 +97,10 @@ class DeliberationEngine:
 
         proposal_turn_id, proposal_output = await self._generate_and_emit_turn(
             team_state=team_state,
-            match_seed=match_seed,
             phase=phase,
             round_number=round_number,
             role=proposer,
             turn_type="PROPOSAL",
-            challenge=challenge,
             expected_references=[],
             pending_patch=None,
         )
@@ -105,12 +109,10 @@ class DeliberationEngine:
 
         objection_turn_id, objection_output = await self._generate_and_emit_turn(
             team_state=team_state,
-            match_seed=match_seed,
             phase=phase,
             round_number=round_number,
             role="CONTRARIAN",
             turn_type="OBJECTION",
-            challenge=challenge,
             expected_references=[proposal_turn_id],
             pending_patch=None,
         )
@@ -119,12 +121,10 @@ class DeliberationEngine:
 
         response_turn_id, response_output = await self._generate_and_emit_turn(
             team_state=team_state,
-            match_seed=match_seed,
             phase=phase,
             round_number=round_number,
             role=responder,
             turn_type="RESPONSE",
-            challenge=challenge,
             expected_references=[proposal_turn_id, objection_turn_id],
             pending_patch=None,
         )
@@ -133,12 +133,10 @@ class DeliberationEngine:
 
         resolution_turn_id, resolution_output = await self._generate_and_emit_turn(
             team_state=team_state,
-            match_seed=match_seed,
             phase=phase,
             round_number=round_number,
             role="SYNTHESIZER",
             turn_type="RESOLUTION",
-            challenge=challenge,
             expected_references=[proposal_turn_id, objection_turn_id, response_turn_id],
             pending_patch=None,
         )
@@ -150,12 +148,10 @@ class DeliberationEngine:
         for role in ("ARCHITECT", "LOREKEEPER", "CONTRARIAN", "SYNTHESIZER"):
             _, vote_events = await self._generate_and_emit_turn(
                 team_state=team_state,
-                match_seed=match_seed,
                 phase=phase,
                 round_number=round_number,
                 role=role,  # type: ignore[arg-type]
                 turn_type="VOTE",
-                challenge=challenge,
                 expected_references=[resolution_turn_id],
                 pending_patch=synthesizer_patch,
             )
@@ -196,19 +192,15 @@ class DeliberationEngine:
         self,
         *,
         team_state: TeamState,
-        match_seed: int,
         phase: int,
         round_number: int,
-        challenge: dict[str, Any],
     ) -> AsyncIterator[EngineEvent]:
         resolution_turn_id, resolution_events = await self._generate_and_emit_turn(
             team_state=team_state,
-            match_seed=match_seed,
             phase=phase,
             round_number=round_number,
             role="SYNTHESIZER",
             turn_type="RESOLUTION",
-            challenge=challenge,
             expected_references=[],
             pending_patch=None,
         )
@@ -220,12 +212,10 @@ class DeliberationEngine:
         for role in ("ARCHITECT", "LOREKEEPER", "CONTRARIAN", "SYNTHESIZER"):
             _, vote_events = await self._generate_and_emit_turn(
                 team_state=team_state,
-                match_seed=match_seed,
                 phase=phase,
                 round_number=round_number,
                 role=role,  # type: ignore[arg-type]
                 turn_type="VOTE",
-                challenge=challenge,
                 expected_references=[resolution_turn_id],
                 pending_patch=synthesizer_patch,
             )
@@ -264,12 +254,10 @@ class DeliberationEngine:
         self,
         *,
         team_state: TeamState,
-        match_seed: int,
         phase: int,
         round_number: int,
         role: Role,
         turn_type: TurnType,
-        challenge: dict[str, Any],
         expected_references: list[str],
         pending_patch: list[dict[str, Any]] | None,
     ) -> tuple[str, list[EngineEvent]]:
@@ -283,21 +271,20 @@ class DeliberationEngine:
         repair_errors: list[str] | None = None
         while True:
             context = TurnContext(
-                match_seed=match_seed,
                 team_id=team_state.team_id,
                 role=role,
                 turn_type=turn_type,
                 phase=phase,
                 round=round_number,
-                challenge=challenge,
-                canon=team_state.canon,
                 pending_patch=pending_patch,
                 allowed_patch_prefixes=allowed_prefixes,
                 expected_references=expected_references,
                 repair_errors=repair_errors,
                 attempt=attempt,
             )
-            output = await self._llm.generate_turn(context)
+            output, new_handle = await self._llm.generate_turn(team_state.conversation, context)
+            team_state.conversation = new_handle  # Update conversation state
+
             events.append(
                 EngineEvent(
                     type="turn_emitted",

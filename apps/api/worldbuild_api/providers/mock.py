@@ -6,8 +6,8 @@ import random
 from dataclasses import dataclass
 from typing import Any
 
-from worldbuild_api.providers.base import ModelConfig, TurnContext
-from worldbuild_api.types import Role, TeamId, TurnOutput, TurnType, VoteChoice
+from worldbuild_api.providers.base import ConversationHandle, ModelConfig, TurnContext
+from worldbuild_api.types import Challenge, Role, TeamId, TurnOutput, TurnType, VoteChoice
 
 
 def _stable_rng(*parts: Any) -> random.Random:
@@ -58,10 +58,38 @@ def _amendment_patch(base_patch: list[dict[str, Any]], path: str, suffix: str) -
 class MockLLMClient:
     config: ModelConfig
 
-    async def generate_turn(self, context: TurnContext) -> TurnOutput:
+    async def start_conversation(
+        self,
+        *,
+        team_id: TeamId,
+        match_seed: int,
+        challenge: Challenge,
+        initial_canon: dict[str, Any],
+    ) -> ConversationHandle:
+        """Mock conversation start - just stores metadata for deterministic generation."""
+        return ConversationHandle(
+            provider="mock",
+            team_id=team_id,
+            data={
+                "match_seed": match_seed,
+                "challenge": challenge,
+                "initial_canon": initial_canon,
+                "turn_count": 0,
+            },
+        )
+
+    async def generate_turn(
+        self,
+        handle: ConversationHandle,
+        context: TurnContext,
+    ) -> tuple[TurnOutput, ConversationHandle]:
+        """Generate a deterministic mock turn."""
+        match_seed = handle.data["match_seed"]
+        challenge = handle.data["challenge"]
+
         rng = _stable_rng(
             "mock-llm",
-            context.match_seed,
+            match_seed,
             context.team_id,
             context.phase,
             context.round,
@@ -70,20 +98,58 @@ class MockLLMClient:
             context.attempt,
         )
 
+        # Create extended context with challenge for turn generation
+        extended_context = _ExtendedContext(
+            team_id=context.team_id,
+            role=context.role,
+            turn_type=context.turn_type,
+            phase=context.phase,
+            round=context.round,
+            pending_patch=context.pending_patch,
+            allowed_patch_prefixes=context.allowed_patch_prefixes,
+            expected_references=context.expected_references,
+            challenge=challenge,
+        )
+
         if context.turn_type == "PROPOSAL":
-            return _proposal_turn(rng, context)
-        if context.turn_type == "OBJECTION":
-            return _objection_turn(rng, context)
-        if context.turn_type == "RESPONSE":
-            return _response_turn(rng, context)
-        if context.turn_type == "RESOLUTION":
-            return _resolution_turn(rng, context)
-        if context.turn_type == "VOTE":
-            return _vote_turn(rng, context)
-        raise ValueError(f"Unhandled turn_type: {context.turn_type}")
+            output = _proposal_turn(rng, extended_context)
+        elif context.turn_type == "OBJECTION":
+            output = _objection_turn(rng, extended_context)
+        elif context.turn_type == "RESPONSE":
+            output = _response_turn(rng, extended_context)
+        elif context.turn_type == "RESOLUTION":
+            output = _resolution_turn(rng, extended_context)
+        elif context.turn_type == "VOTE":
+            output = _vote_turn(rng, extended_context)
+        else:
+            raise ValueError(f"Unhandled turn_type: {context.turn_type}")
+
+        # Update handle with incremented turn count
+        new_handle = ConversationHandle(
+            provider="mock",
+            team_id=handle.team_id,
+            data={**handle.data, "turn_count": handle.data["turn_count"] + 1},
+        )
+
+        return output, new_handle
 
 
-def _proposal_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
+@dataclass
+class _ExtendedContext:
+    """Internal context with challenge info for mock turn generation."""
+
+    team_id: TeamId
+    role: Role
+    turn_type: TurnType
+    phase: int
+    round: int
+    pending_patch: list[dict[str, Any]] | None
+    allowed_patch_prefixes: list[str]
+    expected_references: list[str]
+    challenge: Challenge
+
+
+def _proposal_turn(rng: random.Random, context: _ExtendedContext) -> TurnOutput:
     team = _team_prefix(context.team_id)
     if context.phase == 1:
         world_name = f"{team} {rng.choice(['Bastion', 'Haven', 'Sanctum', 'Spires', 'Archive'])}"
@@ -202,10 +268,14 @@ def _proposal_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
         }
 
     if context.phase == 4:
+        # In provider-managed state, mock doesn't have access to current canon
+        # Use challenge info to generate a plausible hero description
+        team = _team_prefix(context.team_id)
         hero = (
-            f"A wide establishing shot of {context.canon.get('world_name')} in a {context.challenge['biome_setting']}, "
-            f"showing the governing logic in action: {context.canon.get('governing_logic')} "
-            "Foreground figures reveal culture through gesture, tools, and dress; the key tension is visible in the lighting and architecture."
+            f"A wide establishing shot of {team} realm in a {context.challenge['biome_setting']}, "
+            f"with {context.challenge['inhabitants']} going about their daily rituals. "
+            f"The twist constraint '{context.challenge['twist_constraint']}' manifests in the architecture and lighting. "
+            "Foreground figures reveal culture through gesture, tools, and dress; the key tension is visible in the scene."
         )
         patch = [{"op": "replace", "path": "/hero_image_description", "value": hero}]
         return {
@@ -222,7 +292,7 @@ def _proposal_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
     }
 
 
-def _objection_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
+def _objection_turn(rng: random.Random, context: _ExtendedContext) -> TurnOutput:
     return {
         "speaker_role": context.role,
         "turn_type": context.turn_type,
@@ -236,7 +306,7 @@ def _objection_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
     }
 
 
-def _response_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
+def _response_turn(rng: random.Random, context: _ExtendedContext) -> TurnOutput:
     return {
         "speaker_role": context.role,
         "turn_type": context.turn_type,
@@ -250,10 +320,19 @@ def _response_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
     }
 
 
-def _resolution_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
-    base_patch = _proposal_turn(rng, TurnContext(**{**context.__dict__, "turn_type": "PROPOSAL"})).get(
-        "canon_patch", []
+def _resolution_turn(rng: random.Random, context: _ExtendedContext) -> TurnOutput:
+    proposal_context = _ExtendedContext(
+        team_id=context.team_id,
+        role=context.role,
+        turn_type="PROPOSAL",
+        phase=context.phase,
+        round=context.round,
+        pending_patch=context.pending_patch,
+        allowed_patch_prefixes=context.allowed_patch_prefixes,
+        expected_references=context.expected_references,
+        challenge=context.challenge,
     )
+    base_patch = _proposal_turn(rng, proposal_context).get("canon_patch", [])
     return {
         "speaker_role": context.role,
         "turn_type": context.turn_type,
@@ -263,7 +342,7 @@ def _resolution_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
     }
 
 
-def _vote_turn(rng: random.Random, context: TurnContext) -> TurnOutput:
+def _vote_turn(rng: random.Random, context: _ExtendedContext) -> TurnOutput:
     choice = _vote_choice(rng, context.role, context.phase, context.round)
     output: TurnOutput = {
         "speaker_role": context.role,

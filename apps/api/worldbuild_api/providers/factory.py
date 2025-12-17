@@ -34,6 +34,19 @@ def create_llm_client(config: ModelConfig | None = None) -> LLMClient:
         )
 
     if provider == "anthropic":
-        raise ValueError("LLM_PROVIDER=anthropic is stubbed for now (adapter not implemented yet).")
+        from worldbuild_api.providers.anthropic import AnthropicLLMClient
+
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic")
+        return AnthropicLLMClient(
+            api_key=api_key,
+            config=ModelConfig(
+                provider="anthropic",
+                model=model or "claude-sonnet-4-20250514",
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            ),
+        )
 
     raise ValueError(f"Unsupported LLM provider '{provider}'.")

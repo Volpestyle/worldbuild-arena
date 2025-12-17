@@ -83,21 +83,23 @@ Use the structured transcript as the single driver of presentation:
 
 ---
 
-## 1. Core idea: an “agent” is a contract, not a process
+## 1. Core idea: an "agent" is a contract, not a process
 
-From a dev standpoint, treat each agent as a pure function plus state injection:
+From a dev standpoint, treat each agent as a pure function within a provider-managed conversation:
 
-`Agent = (Role Prompt + Turn Contract + Shared Team State) → (Structured Turn Output)`
+`Agent = (Role Prompt + Turn Context) → (Structured Turn Output)`
 
-You do not need “long-running agent processes.” Each agent “retains identity” because your orchestrator repeatedly calls the model with:
+You do not need "long-running agent processes." Each agent "retains identity" because the LLM provider maintains conversation state, and your orchestrator chains requests using `previous_response_id`.
 
-- the same role instructions (Architect/Lorekeeper/etc.)
-- the same constraints
-- the same team transcript/canon state
+**Architecture decision (implemented):** We use **provider-managed conversation state** via OpenAI's Responses API. This means:
 
-If you want server-managed memory, some LLM providers support persistent “conversations” / threads (for example, OpenAI Responses `conversations`). Treat this as an optional adapter feature — the orchestrator should still use your DB-backed transcript + canon as the source of truth.
+- One conversation per team (Team A and Team B are independent)
+- All 4 agents share their team's conversation thread
+- The provider remembers the full deliberation history
+- Each turn only needs minimal context (role, turn type, phase info)
+- Token savings: ~60-80% vs. re-injecting full transcript each call
 
-But for this spec (10-ish rounds, bounded scope), app-managed transcript + canon is simplest, deterministic, and easy to validate.
+The tradeoff: we rely on the provider as the source of truth for conversation context. Canon patches are still validated and applied locally, and events are logged to SQLite for replay/audit.
 
 ---
 
@@ -237,31 +239,39 @@ This is the key technical trick: canon becomes the authoritative state, and the 
 
 ## 5. Prompt assembly
 
-Every call to the model should be constructed from deterministic parts.
+With provider-managed conversation state, prompts are simpler. The provider remembers context; we just provide turn-specific instructions.
 
-### 5.1 Prompt template layers
+### 5.1 Conversation initialization (once per team)
 
-1. Role instructions (system/developer)
-   - mandate
-   - personality pressure
-   - non-negotiable constraints (no +1, etc.)
-2. Match context (user)
-   - challenge
-   - current phase/round index
-   - “your turn type”
-3. Shared state (user)
-   - current canon JSON snapshot
-   - last N transcript events (or full transcript if small)
+When starting a team's conversation, include:
 
-### 5.2 Example LLM API call (conceptual)
+1. System prompt with all role mandates and discourse rules
+2. Challenge details (biome, inhabitants, twist constraint)
+3. Initial canon state (placeholder structure)
 
-(Exact field names vary by SDK version, but the structure is the same.)
+This is sent once via `start_conversation()` and the provider retains it.
 
-- Provide role-level system guidance (e.g., `instructions` / system prompt, depending on SDK).
-- Configure structured output (JSON schema) using your provider’s mechanism (e.g., OpenAI `text.format`).
-- Limit tokens (`max_output_tokens` or provider equivalent).
+### 5.2 Per-turn prompt (minimal)
 
-You can also attach metadata for traceability (`agent_id`, `match_id`, `team_id`).
+Each subsequent turn only needs:
+
+- Current role (ARCHITECT/LOREKEEPER/CONTRARIAN/SYNTHESIZER)
+- Turn type (PROPOSAL/OBJECTION/RESPONSE/RESOLUTION/VOTE)
+- Phase and round number
+- Allowed patch prefixes (for validation feedback)
+- Expected references (for RESOLUTION turns)
+- Repair errors (if retrying after validation failure)
+
+The provider chains this via `previous_response_id`, so it sees the full conversation history without us resending it.
+
+### 5.3 Structured output
+
+Configure structured output using the provider's mechanism:
+
+- OpenAI Responses API: `text.format.type = "json_schema"` with `strict: True`
+- Schema: TurnOutput (from `packages/contracts/schemas/`)
+
+This guarantees valid JSON matching our schema, eliminating parse errors.
 
 ---
 
@@ -416,36 +426,64 @@ Benefits:
 
 ---
 
-## 10. Identity & conversation state options (practical tradeoffs)
+## 10. Identity & conversation state (implemented approach)
 
-### Option A (recommended MVP): app-managed state injection
+### Provider-specific strategies
 
-- Store transcript + canon in your DB.
-- Each agent call includes:
-  - role instructions
-  - full/partial transcript
-  - canon snapshot
-- Pros: deterministic, portable, easy to test
-- Cons: more tokens per call
+We use different approaches per provider to optimize for their capabilities:
 
-### Option B: Provider-managed conversations per team or per agent
+**OpenAI: Response chaining** — Uses Responses API with `previous_response_id`:
 
-Some providers offer durable conversation/thread objects. For example, OpenAI Responses supports `conversations`, where items are prepended and new items are added automatically.
+```
+start_conversation() → response_id_0
+generate_turn(previous_response_id=response_id_0) → response_id_1
+generate_turn(previous_response_id=response_id_1) → response_id_2
+...
+```
 
-If you do this:
+**Key design points:**
 
-- Create a conversation/thread ID for each agent or each team (provider-specific; e.g., `conversation_id`).
-- Add each structured turn output as conversation items (or rely on the provider SDK to append them).
-- Still keep canon in your DB (don’t rely on the model’s memory as the source of truth).
+- **One conversation per team**: Team A and Team B each get their own conversation thread
+- **All 4 agents share the thread**: The provider sees the full deliberation as a single conversation
+- **ConversationHandle**: An opaque wrapper that stores `response_id` and gets passed between turns
+- **Canon still local**: We apply and validate patches locally in SQLite; provider just remembers the discussion
 
-### Option C: Provider request chaining (e.g., `previous_response_id`)
+**Anthropic: App-managed state + prompt caching** — Stores conversation locally, resends each call:
 
-Some APIs support chaining requests via a previous response ID (OpenAI: `previous_response_id`). If you do this, note:
+```
+start_conversation() → stores system prompt + schema in handle
+generate_turn() → sends full messages[] array with cache_control on system prompt
+```
 
-- in some APIs (e.g., OpenAI), instructions are not carried over when chaining — you must resend them
-- in some APIs (e.g., OpenAI), you can’t use conversation and chaining together
+Anthropic's API is stateless, so we:
+- Store conversation history in `ConversationHandle.data["messages"]`
+- Resend full message array each call
+- Use `cache_control: {"type": "ephemeral"}` on system prompt for prompt caching
+- Use tool_use with forced tool choice for structured output
 
-Given your need for strict role behavior, Option A or B is typically cleaner.
+### Token comparison
+
+| Provider | Strategy | Tokens per late-game call | Cost optimization |
+|----------|----------|---------------------------|-------------------|
+| OpenAI | Response chaining | ~500-1,000 | Provider remembers context |
+| Anthropic | App-managed + cache | ~2,000-4,000 | Prompt caching reduces cost by ~90% on cached prefix |
+| Mock | N/A | 0 | For testing only |
+
+### Tradeoffs by provider
+
+**OpenAI:**
+- Pro: Minimal tokens per call
+- Con: Provider is source of truth for context
+
+**Anthropic:**
+- Pro: Full control over conversation state
+- Con: More bytes over the wire (mitigated by prompt caching)
+
+### Alternative approaches (not chosen)
+
+**Option A: App-managed state injection** — Each call includes full transcript + canon. More portable and testable, but ~3-4x more expensive in tokens.
+
+**Option B: Provider conversations API** — Use `conversation_id` for persistent threads. Similar benefits to chaining, but different API surface.
 
 ---
 
@@ -530,8 +568,9 @@ apps/web/                     # React/TS UI (event replay)
 
 ## 14. Key engineering principles for this project
 
-1. Canon is truth; transcript is audit.
-2. Every agent output must be structured JSON (not freeform prose).
-3. Validators enforce the game rules, not prompts alone.
-4. Deterministic orchestration beats “emergent coordination” (especially for fairness).
-5. Neutral PromptEngineer is a separate agent + schema, not a hand-edited step.
+1. **Adapter pattern for providers.** Each provider uses its optimal strategy (OpenAI: response chaining, Anthropic: app-managed + prompt caching). The engine doesn't know the difference.
+2. **Every agent output must be structured JSON** (not freeform prose). OpenAI uses `json_schema`, Anthropic uses `tool_use` with forced choice.
+3. **Validators enforce the game rules**, not prompts alone. The provider can't guarantee discourse rules; we validate after each turn.
+4. **Deterministic orchestration** beats "emergent coordination" (especially for fairness). Turn order is fixed by the FSM scheduler.
+5. **Neutral PromptEngineer** is a separate agent + schema, not a hand-edited step.
+6. **Optimize for token cost per provider.** OpenAI: response chaining. Anthropic: prompt caching. Both reduce costs significantly vs. naive resending.

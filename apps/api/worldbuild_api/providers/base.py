@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from worldbuild_api.types import Challenge, Role, TeamId, TurnType, TurnOutput
@@ -14,16 +14,28 @@ class ModelConfig:
     max_output_tokens: int = 900
 
 
+@dataclass
+class ConversationHandle:
+    """Opaque handle to a provider-managed conversation.
+
+    The engine passes this between calls but never inspects it.
+    Each provider stores whatever state it needs (e.g., response_id for OpenAI).
+    """
+
+    provider: str
+    team_id: TeamId
+    data: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class TurnContext:
-    match_seed: int
+    """Minimal per-turn context. Provider manages conversation history."""
+
     team_id: TeamId
     role: Role
     turn_type: TurnType
     phase: int
     round: int
-    challenge: Challenge
-    canon: dict[str, Any]
     pending_patch: list[dict[str, Any]] | None
     allowed_patch_prefixes: list[str]
     expected_references: list[str]
@@ -32,7 +44,24 @@ class TurnContext:
 
 
 class LLMClient(Protocol):
-    async def generate_turn(self, context: TurnContext) -> TurnOutput: ...
+    async def start_conversation(
+        self,
+        *,
+        team_id: TeamId,
+        match_seed: int,
+        challenge: Challenge,
+        initial_canon: dict[str, Any],
+    ) -> ConversationHandle:
+        """Initialize a conversation for a team. Called once per team per match."""
+        ...
+
+    async def generate_turn(
+        self,
+        handle: ConversationHandle,
+        context: TurnContext,
+    ) -> tuple[TurnOutput, ConversationHandle]:
+        """Generate a turn within an existing conversation. Returns updated handle."""
+        ...
 
 
 class ImageClient(Protocol):
