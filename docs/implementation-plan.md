@@ -59,6 +59,7 @@ Define provider-neutral interfaces so `apps/api` never depends on a single AI ve
 - For image generation, mirror the same approach:
   - define an `ImageClient` interface
   - add provider-specific adapters as needed
+  - default model of choice: Gemini “nano banana” (configured, not hard-coded)
 
 ### 4) Engine core (pure + deterministic)
 
@@ -113,7 +114,7 @@ Mobile specifics:
 In `apps/api` + endpoints:
 
 - PromptEngineer runs on final validated canon only (fairness)
-- Generate/store 6 artifacts/team (or prompts-only MVP)
+- Generate/store 6 artifacts/team (or prompts-only MVP); image generation default is Gemini “nano banana” via `ImageClient`
 - Blind packager that strips team labels for judging
 
 In `apps/web`:
@@ -132,4 +133,4 @@ In `apps/web`:
 - Schema codegen: how to generate TS + Python types/models from JSON Schema (tooling choice + where generated code lives)
 - Persistence: SQLite first vs Postgres from day 1
 - LLM provider(s) + models: pick a default adapter, but keep `LLMClient` provider-neutral
-- Image generation provider + storage (local files vs S3-compatible), ideally via an `ImageClient` adapter layer
+- Image generation: default Gemini “nano banana”, but keep `ImageClient` provider-neutral; confirm storage (local files vs S3-compatible)

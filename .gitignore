@@ -4,4 +4,16 @@ node_modules/
 dist/
 .svelte-kit/
 .next/
+.pnpm-store/
+.turbo/
 
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+apps/api/*.sqlite3
+apps/api/*.db
+apps/api/data/

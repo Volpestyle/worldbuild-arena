@@ -3,3 +3,9 @@ Worldbuilding Sprint: two teams of role-constrained LLM agents deliberate to pro
 
 - Design spec: `docs/spec.md`
 - Technical spec: `docs/tech.md`
+
+## Dev
+
+- Install JS deps: `pnpm install`
+- Set up API venv: `pnpm setup:api`
+- Run web + API: `pnpm dev` (web: `http://localhost:5173`, API: `http://localhost:8000`)

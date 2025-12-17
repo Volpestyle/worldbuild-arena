@@ -269,21 +269,3 @@ Respond in character. Be concise but substantive.
 ```
 
 ---
-
-## Open Questions / Future Iterations
-
-1. **Model mixing:** Should teams use heterogeneous models (e.g., Claude + GPT on same team)?
-2. **Audience participation:** Could live viewers inject "curveball" constraints mid-deliberation?
-3. **Tournament structure:** Single elimination? Round robin? Elo rating?
-4. **Asymmetric challenges:** Same biome, different inhabitants — compare solutions?
-5. **Human-in-the-loop:** One human on each team as a 5th "wildcard" agent?
-
----
-
-## Next Steps
-
-1. **Prototype single-team deliberation** — Get one team working end-to-end
-2. **Tune role prompts** — Contrarian too aggressive? Synthesizer too passive?
-3. **Test spec → image fidelity** — Does the prompt engineer preserve intent?
-4. **Run head-to-head** — Two teams, same challenge, blind judge
-5. **Iterate on judging rubric** — What actually predicts "this world is cool"?

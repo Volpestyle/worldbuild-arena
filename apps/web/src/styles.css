@@ -1,0 +1,106 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --panel: #101826;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #7ee787;
+  --danger: #ff7b72;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  background: radial-gradient(1200px 800px at 20% 0%, #18233a 0%, var(--bg) 60%);
+  color: var(--text);
+}
+
+.page {
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(16, 24, 38, 0.85);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.error {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 123, 114, 0.4);
+  background: rgba(255, 123, 114, 0.08);
+  color: var(--danger);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(16, 24, 38, 0.75);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.cardTitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 13px;
+}
+
+.events {
+  margin: 0;
+  max-height: 55vh;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: rgba(230, 237, 243, 0.88);
+}

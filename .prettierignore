@@ -1,0 +1,7 @@
+node_modules
+dist
+.turbo
+.venv
+.pytest_cache
+__pycache__
+pnpm-lock.yaml

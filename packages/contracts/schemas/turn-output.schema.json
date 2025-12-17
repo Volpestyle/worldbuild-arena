@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldbuild-arena.dev/schemas/turn-output.schema.json",
+  "title": "TurnOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["speaker_role", "turn_type", "content"],
+  "properties": {
+    "speaker_role": {
+      "type": "string",
+      "enum": ["ARCHITECT", "LOREKEEPER", "CONTRARIAN", "SYNTHESIZER"]
+    },
+    "turn_type": {
+      "type": "string",
+      "enum": ["PROPOSAL", "OBJECTION", "RESPONSE", "RESOLUTION", "VOTE"]
+    },
+    "content": { "type": "string", "minLength": 1 },
+    "canon_patch": { "$ref": "https://worldbuild-arena.dev/schemas/json-patch.schema.json" },
+    "references": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "vote": { "$ref": "#/$defs/vote" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "turn_type": { "const": "VOTE" } }, "required": ["turn_type"] },
+      "then": { "required": ["vote"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "turn_type": { "const": "VOTE" },
+          "vote": { "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] }
+        },
+        "required": ["turn_type", "vote"]
+      },
+      "then": { "required": ["canon_patch"] }
+    }
+  ],
+  "$defs": {
+    "vote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["choice"],
+      "properties": {
+        "choice": { "type": "string", "enum": ["ACCEPT", "AMEND", "REJECT"] },
+        "amendment_summary": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] },
+          "then": { "required": ["amendment_summary"] }
+        }
+      ]
+    }
+  }
+}

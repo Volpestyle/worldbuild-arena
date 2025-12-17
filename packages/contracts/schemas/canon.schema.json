@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldbuild-arena.dev/schemas/canon.schema.json",
+  "title": "Canon",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "world_name",
+    "governing_logic",
+    "aesthetic_mood",
+    "landmarks",
+    "inhabitants",
+    "tension",
+    "hero_image_description"
+  ],
+  "properties": {
+    "world_name": { "type": "string", "minLength": 1 },
+    "governing_logic": { "type": "string", "minLength": 1 },
+    "aesthetic_mood": {
+      "type": "string",
+      "minLength": 1,
+      "description": "3-5 adjectives"
+    },
+    "landmarks": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/landmark" }
+    },
+    "inhabitants": { "$ref": "#/$defs/inhabitants" },
+    "tension": { "$ref": "#/$defs/tension" },
+    "hero_image_description": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "landmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "significance", "visual_key"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "significance": { "type": "string", "minLength": 1 },
+        "visual_key": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inhabitants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appearance", "culture_snapshot", "relationship_to_place"],
+      "properties": {
+        "appearance": { "type": "string", "minLength": 1 },
+        "culture_snapshot": { "type": "string", "minLength": 1 },
+        "relationship_to_place": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflict", "stakes", "visual_manifestation"],
+      "properties": {
+        "conflict": { "type": "string", "minLength": 1 },
+        "stakes": { "type": "string", "minLength": 1 },
+        "visual_manifestation": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

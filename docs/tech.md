@@ -33,7 +33,7 @@ Treat the match as a replayable, turn-based performance that’s visually legibl
 - **Environment**: neutral arena with controllable mood lighting; phase changes can alter rim light color, fog density, or background motif.
 - **Tables**: circular tables with 4 seats; per-seat “turn lamps” that light up when that role is active.
 - **Avatars**:
-  - MVP: stylized low-poly or capsule characters (cheap to animate, easy to read)
+  - MVP: stylized low-poly characters (cheap to animate, easy to read)
   - Later: swappable GLTF rigs; role-specific idle animations (thinking, pointing, disagreeing, summarizing)
 
 Implementation note: using a React renderer for three.js (e.g., `@react-three/fiber`) simplifies state-driven updates and co-locates React UI state with scene state, while still using three.js under the hood.
@@ -112,7 +112,7 @@ But for this spec (10-ish rounds, bounded scope), app-managed transcript + canon
 - **Validator**: schema + discourse constraints
 - **CanonStore**: applies accepted amendments into canonical world state
 - **PromptEngineer**: neutral 5th agent translating final spec → image prompts
-- **Generator**: calls image generation model
+- **Generator**: calls image generation model (default: Gemini “nano banana”, behind an adapter)
 - **Judge**: blind scoring (humans or model judges)
 
 ### High-level dataflow
@@ -453,18 +453,28 @@ Given your need for strict role behavior, Option A or B is typically cleaner.
 
 Treat PromptEngineer as another structured-output agent with strict schema.
 
-PromptPack schema:
+PromptPack schema (recommended: **structured prompts**, not raw strings):
 
-- `hero_image_prompt`
-- `landmark_prompts[3]`
-- `inhabitant_portrait_prompt`
-- `tension_snapshot_prompt`
-- optional: `negative_prompt`, `style_tags`, `camera_notes`
+- `style_profile` (optional shared defaults: medium, rendering style, banned elements, etc.)
+- `hero_image` (`ImagePrompt`)
+- `landmarks[3]` (`ImagePrompt`)
+- `inhabitant_portrait` (`ImagePrompt`)
+- `tension_snapshot` (`ImagePrompt`)
+
+`ImagePrompt` fields (store as JSON; render per-provider in `ImageClient`):
+
+- `rendered_prompt` (required string; what you actually send to the image model today)
+- `spec` (required object; the “high-detail” structured description)
+  - e.g. `subject`, `setting`, `composition`, `camera`, `lighting`, `materials`, `palette`, `mood`, `style_tags`
+- `negative_prompt` (optional string)
+- `params` (optional object; aspect ratio, size, seed, guidance, etc. as supported)
+- `canon_refs` (optional list; pointers into canon for traceability/debugging)
 
 Implementation details:
 
 - PromptEngineer input is only the final validated canon/spec (no transcript).
 - It must be shared across both teams for fairness.
+- Enforce “sufficient detail” via schema + validator rules (required subfields, minimum lengths, and/or required coverage like camera + lighting + composition for every prompt). Even if the upstream image model is text-only, keeping the prompt *structured* lets you validate, diff, and re-render consistently across providers.
 
 ---
 
@@ -525,11 +535,3 @@ apps/web/                     # React/TS UI (event replay)
 3. Validators enforce the game rules, not prompts alone.
 4. Deterministic orchestration beats “emergent coordination” (especially for fairness).
 5. Neutral PromptEngineer is a separate agent + schema, not a hand-edited step.
-
----
-
-If you want, I can follow this up with:
-
-- a concrete JSON Schema for TurnOutput + Canon
-- a deterministic “Phase/round schedule” object (so matches are replayable)
-- pseudocode for `DeliberationEngine.run_team(team, challenge)` including the repair loop and vote resolution

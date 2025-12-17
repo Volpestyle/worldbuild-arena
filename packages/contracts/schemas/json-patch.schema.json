@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldbuild-arena.dev/schemas/json-patch.schema.json",
+  "title": "JsonPatch",
+  "type": "array",
+  "items": { "$ref": "#/$defs/operation" },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "pattern": "^(/([^/~]|(~0)|(~1))*)*$"
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "path", "value"],
+          "properties": {
+            "op": { "const": "add" },
+            "path": { "$ref": "#/$defs/path" },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "path"],
+          "properties": {
+            "op": { "const": "remove" },
+            "path": { "$ref": "#/$defs/path" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "path", "value"],
+          "properties": {
+            "op": { "const": "replace" },
+            "path": { "$ref": "#/$defs/path" },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "from", "path"],
+          "properties": {
+            "op": { "const": "move" },
+            "from": { "$ref": "#/$defs/path" },
+            "path": { "$ref": "#/$defs/path" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "from", "path"],
+          "properties": {
+            "op": { "const": "copy" },
+            "from": { "$ref": "#/$defs/path" },
+            "path": { "$ref": "#/$defs/path" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "path", "value"],
+          "properties": {
+            "op": { "const": "test" },
+            "path": { "$ref": "#/$defs/path" },
+            "value": {}
+          }
+        }
+      ]
+    }
+  }
+}

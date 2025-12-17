@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://worldbuild-arena.dev/schemas/match-event.schema.json",
+  "title": "MatchEvent",
+  "oneOf": [
+    { "$ref": "#/$defs/match_created" },
+    { "$ref": "#/$defs/challenge_revealed" },
+    { "$ref": "#/$defs/phase_started" },
+    { "$ref": "#/$defs/turn_emitted" },
+    { "$ref": "#/$defs/turn_validation_failed" },
+    { "$ref": "#/$defs/vote_result" },
+    { "$ref": "#/$defs/canon_patch_applied" },
+    { "$ref": "#/$defs/match_completed" },
+    { "$ref": "#/$defs/match_failed" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "seq", "ts", "match_id", "team_id", "type", "data"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "ts": { "type": "string", "format": "date-time" },
+        "match_id": { "type": "string", "minLength": 1 },
+        "team_id": { "type": ["string", "null"], "enum": ["A", "B", null] },
+        "type": { "type": "string", "minLength": 1 },
+        "data": { "type": "object" }
+      }
+    },
+    "challenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "tier", "biome_setting", "inhabitants", "twist_constraint"],
+      "properties": {
+        "seed": { "type": "integer" },
+        "tier": { "type": "integer", "enum": [1, 2, 3] },
+        "biome_setting": { "type": "string", "minLength": 1 },
+        "inhabitants": { "type": "string", "minLength": 1 },
+        "twist_constraint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "match_created": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "const": null },
+            "type": { "const": "match_created" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["seed", "tier"],
+              "properties": {
+                "seed": { "type": "integer" },
+                "tier": { "type": "integer", "enum": [1, 2, 3] }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "challenge_revealed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "const": null },
+            "type": { "const": "challenge_revealed" },
+            "data": { "$ref": "#/$defs/challenge" }
+          }
+        }
+      ]
+    },
+    "phase_started": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "const": null },
+            "type": { "const": "phase_started" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["phase", "round_count"],
+              "properties": {
+                "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
+                "round_count": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "turn_emitted": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "turn_emitted" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["phase", "round", "turn_id", "output"],
+              "properties": {
+                "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
+                "round": { "type": "integer", "minimum": 1 },
+                "turn_id": { "type": "string", "minLength": 1 },
+                "output": { "$ref": "https://worldbuild-arena.dev/schemas/turn-output.schema.json" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "turn_validation_failed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "turn_validation_failed" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["phase", "round", "turn_id", "errors"],
+              "properties": {
+                "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
+                "round": { "type": "integer", "minimum": 1 },
+                "turn_id": { "type": "string", "minLength": 1 },
+                "errors": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "vote_result": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "vote_result" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["phase", "round", "result", "tally"],
+              "properties": {
+                "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
+                "round": { "type": "integer", "minimum": 1 },
+                "result": { "type": "string", "enum": ["ACCEPT", "AMEND", "REJECT", "DEADLOCK"] },
+                "tally": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["ACCEPT", "AMEND", "REJECT"],
+                  "properties": {
+                    "ACCEPT": { "type": "integer", "minimum": 0 },
+                    "AMEND": { "type": "integer", "minimum": 0 },
+                    "REJECT": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "canon_patch_applied": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "canon_patch_applied" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "phase",
+                "round",
+                "turn_id",
+                "patch",
+                "canon_before_hash",
+                "canon_after_hash"
+              ],
+              "properties": {
+                "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
+                "round": { "type": "integer", "minimum": 1 },
+                "turn_id": { "type": "string", "minLength": 1 },
+                "patch": { "$ref": "https://worldbuild-arena.dev/schemas/json-patch.schema.json" },
+                "canon_before_hash": { "type": "string", "minLength": 1 },
+                "canon_after_hash": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "match_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "const": null },
+            "type": { "const": "match_completed" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["canon_hash_a", "canon_hash_b"],
+              "properties": {
+                "canon_hash_a": { "type": "string", "minLength": 1 },
+                "canon_hash_b": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "match_failed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "const": null },
+            "type": { "const": "match_failed" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["error"],
+              "properties": {
+                "error": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

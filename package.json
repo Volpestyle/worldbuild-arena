@@ -1,0 +1,27 @@
+{
+  "name": "worldbuild-arena",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.23.0",
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,magenta \"pnpm --filter @wba/web dev\" \"pnpm dev:api\"",
+    "dev:api": "cd apps/api && .venv/bin/python -m uvicorn worldbuild_api.main:app --reload --port 8000",
+    "build": "pnpm -r build && pnpm build:api",
+    "build:api": "python -m compileall apps/api/worldbuild_api",
+    "lint": "pnpm -r lint && eslint .",
+    "format": "prettier -w .",
+    "test": "pnpm -r test && pnpm test:api",
+    "test:api": "cd apps/api && .venv/bin/python -m pytest -q",
+    "setup:api": "python -m venv apps/api/.venv && apps/api/.venv/bin/python -m pip install -U pip && apps/api/.venv/bin/python -m pip install -e 'apps/api[dev]'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@eslint/js": "^9.17.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.13.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}
