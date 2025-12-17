@@ -25,18 +25,19 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "turn_type": { "const": "VOTE" } }, "required": ["turn_type"] },
-      "then": { "required": ["vote"] }
+      "if": { "type": "object", "properties": { "turn_type": { "const": "VOTE" } }, "required": ["turn_type"] },
+      "then": { "type": "object", "required": ["vote"], "properties": { "vote": {} } }
     },
     {
       "if": {
+        "type": "object",
         "properties": {
           "turn_type": { "const": "VOTE" },
-          "vote": { "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] }
+          "vote": { "type": "object", "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] }
         },
         "required": ["turn_type", "vote"]
       },
-      "then": { "required": ["canon_patch"] }
+      "then": { "type": "object", "required": ["canon_patch"], "properties": { "canon_patch": {} } }
     }
   ],
   "$defs": {
@@ -50,8 +51,8 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] },
-          "then": { "required": ["amendment_summary"] }
+          "if": { "type": "object", "properties": { "choice": { "const": "AMEND" } }, "required": ["choice"] },
+          "then": { "type": "object", "required": ["amendment_summary"], "properties": { "amendment_summary": {} } }
         }
       ]
     }

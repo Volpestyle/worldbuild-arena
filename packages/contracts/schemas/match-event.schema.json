@@ -46,6 +46,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "const": null },
             "type": { "const": "match_created" },
@@ -66,6 +67,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "const": null },
             "type": { "const": "challenge_revealed" },
@@ -78,6 +80,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "const": null },
             "type": { "const": "phase_started" },
@@ -98,6 +101,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "canon_initialized" },
@@ -118,6 +122,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "turn_emitted" },
@@ -140,6 +145,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "turn_validation_failed" },
@@ -166,6 +172,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "vote_result" },
@@ -197,6 +204,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "canon_patch_applied" },
@@ -228,6 +236,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "type": "string", "enum": ["A", "B"] },
             "type": { "const": "prompt_pack_generated" },
@@ -249,6 +258,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "const": null },
             "type": { "const": "match_completed" },
@@ -269,6 +279,7 @@
       "allOf": [
         { "$ref": "#/$defs/base" },
         {
+          "type": "object",
           "properties": {
             "team_id": { "const": null },
             "type": { "const": "match_failed" },
