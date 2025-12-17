@@ -77,10 +77,12 @@ export type MatchEventType =
   | "match_created"
   | "challenge_revealed"
   | "phase_started"
+  | "canon_initialized"
   | "turn_emitted"
   | "turn_validation_failed"
   | "vote_result"
   | "canon_patch_applied"
+  | "prompt_pack_generated"
   | "match_completed"
   | "match_failed";
 
@@ -111,6 +113,18 @@ export type MatchEvent =
       team_id: null;
       type: "phase_started";
       data: { phase: number; round_count: number };
+    }
+  | {
+      id: string;
+      seq: number;
+      ts: string;
+      match_id: string;
+      team_id: TeamId;
+      type: "canon_initialized";
+      data: {
+        canon: Canon;
+        canon_hash: string;
+      };
     }
   | {
       id: string;
@@ -168,6 +182,17 @@ export type MatchEvent =
         patch: JsonPatchOp[];
         canon_before_hash: string;
         canon_after_hash: string;
+      };
+    }
+  | {
+      id: string;
+      seq: number;
+      ts: string;
+      match_id: string;
+      team_id: TeamId;
+      type: "prompt_pack_generated";
+      data: {
+        prompt_pack: PromptPack;
       };
     }
   | {

@@ -6,6 +6,8 @@ from typing import Any, AsyncIterator
 
 import jsonpatch
 
+from worldbuild_api.contracts.ids import CANON_SCHEMA_ID, PROMPT_PACK_SCHEMA_ID
+from worldbuild_api.contracts.validate import validate_with_schema
 from worldbuild_api.engine.challenge import generate_challenge
 from worldbuild_api.engine.events import EngineEvent
 from worldbuild_api.engine.rules import PHASE_ROUNDS, allowed_patch_prefixes_for_phase
@@ -43,6 +45,17 @@ class DeliberationEngine:
         canon_a = _initial_canon("A", challenge)
         canon_b = _initial_canon("B", challenge)
 
+        yield EngineEvent(
+            type="canon_initialized",
+            team_id="A",
+            data={"canon": canon_a, "canon_hash": sha256_hex(canon_a)},
+        )
+        yield EngineEvent(
+            type="canon_initialized",
+            team_id="B",
+            data={"canon": canon_b, "canon_hash": sha256_hex(canon_b)},
+        )
+
         conv_a = await self._llm.start_conversation(
             team_id="A", match_seed=seed, challenge=challenge, initial_canon=canon_a
         )
@@ -65,6 +78,29 @@ class DeliberationEngine:
                         round_number=round_number,
                     ):
                         yield event
+
+        # Phase 5: prompt pack generation (neutral prompt engineering from final canon only)
+        yield EngineEvent(type="phase_started", team_id=None, data={"phase": 5, "round_count": 1})
+
+        for team_state in (team_a, team_b):
+            canon_validation = validate_with_schema(CANON_SCHEMA_ID, team_state.canon)
+            if not canon_validation.ok:
+                raise RuntimeError(f"Final canon failed schema validation: {canon_validation.errors}")
+
+            prompt_pack = await self._llm.generate_prompt_pack(
+                match_seed=seed,
+                team_id=team_state.team_id,
+                canon=team_state.canon,
+            )
+            prompt_validation = validate_with_schema(PROMPT_PACK_SCHEMA_ID, prompt_pack)
+            if not prompt_validation.ok:
+                raise RuntimeError(f"PromptPack failed schema validation: {prompt_validation.errors}")
+
+            yield EngineEvent(
+                type="prompt_pack_generated",
+                team_id=team_state.team_id,
+                data={"prompt_pack": prompt_pack},
+            )
 
         yield EngineEvent(
             type="match_completed",

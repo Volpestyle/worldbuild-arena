@@ -133,6 +133,87 @@ class MockLLMClient:
 
         return output, new_handle
 
+    async def generate_prompt_pack(
+        self,
+        *,
+        match_seed: int,
+        team_id: TeamId,
+        canon: dict[str, Any],
+    ) -> dict[str, Any]:
+        rng = _stable_rng("mock-prompt-pack", match_seed, team_id, canon)
+
+        world_name = str(canon.get("world_name") or _team_prefix(team_id))
+        mood = str(canon.get("aesthetic_mood") or "atmospheric, cinematic")
+        governing_logic = str(canon.get("governing_logic") or "")
+
+        hero = str(canon.get("hero_image_description") or "")
+        landmarks = canon.get("landmarks") or []
+        inhabitants = canon.get("inhabitants") or {}
+        tension = canon.get("tension") or {}
+
+        style_tag = rng.choice(
+            [
+                "cinematic concept art, ultra-detailed, volumetric lighting",
+                "painterly matte painting, moody atmosphere, high detail",
+                "photoreal, wide dynamic range, dramatic lighting",
+                "stylized realism, rich texture, soft haze",
+            ]
+        )
+
+        def prompt_suffix() -> str:
+            return f"Style: {style_tag}. Mood: {mood}. Governing logic visible: {governing_logic}"
+
+        hero_prompt = f"{hero}\n{prompt_suffix()}".strip()
+
+        triptych: list[dict[str, Any]] = []
+        for idx in range(3):
+            lm = landmarks[idx] if idx < len(landmarks) else {}
+            name = str(lm.get("name") or f"Landmark {idx + 1}")
+            description = str(lm.get("description") or "")
+            visual_key = str(lm.get("visual_key") or "")
+            significance = str(lm.get("significance") or "")
+            triptych.append(
+                {
+                    "title": f"Landmark — {name}",
+                    "prompt": (
+                        f"Square composition of {name}. {description} "
+                        f"Key visual: {visual_key}. Significance: {significance}. "
+                        f"{prompt_suffix()}"
+                    ).strip(),
+                    "aspect_ratio": "1:1",
+                }
+            )
+
+        portrait_prompt = (
+            f"Portrait of an inhabitant of {world_name} in context. "
+            f"Appearance: {inhabitants.get('appearance','')}. "
+            f"Culture: {inhabitants.get('culture_snapshot','')}. "
+            f"Relationship to place: {inhabitants.get('relationship_to_place','')}. "
+            f"{prompt_suffix()}"
+        ).strip()
+
+        tension_prompt = (
+            f"A narrative moment in {world_name} showing the central tension. "
+            f"Conflict: {tension.get('conflict','')}. Stakes: {tension.get('stakes','')}. "
+            f"Visible manifestation: {tension.get('visual_manifestation','')}. "
+            f"{prompt_suffix()}"
+        ).strip()
+
+        return {
+            "hero_image": {"title": f"Hero Image — {world_name}", "prompt": hero_prompt, "aspect_ratio": "16:9"},
+            "landmark_triptych": triptych,
+            "inhabitant_portrait": {
+                "title": f"Inhabitant Portrait — {world_name}",
+                "prompt": portrait_prompt,
+                "aspect_ratio": "3:4",
+            },
+            "tension_snapshot": {
+                "title": f"Tension Snapshot — {world_name}",
+                "prompt": tension_prompt,
+                "aspect_ratio": "16:9",
+            },
+        }
+
 
 @dataclass
 class _ExtendedContext:

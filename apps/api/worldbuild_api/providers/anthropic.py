@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from worldbuild_api.contracts.ids import TURN_OUTPUT_SCHEMA_ID
+from worldbuild_api.contracts.ids import PROMPT_PACK_SCHEMA_ID, TURN_OUTPUT_SCHEMA_ID
 from worldbuild_api.contracts.loader import get_contracts
 from worldbuild_api.providers.base import ConversationHandle, ModelConfig, TurnContext
 from worldbuild_api.types import Challenge, TeamId, TurnOutput
@@ -152,6 +152,70 @@ class AnthropicLLMClient:
 
         return output, new_handle
 
+    async def generate_prompt_pack(
+        self,
+        *,
+        match_seed: int,
+        team_id: TeamId,
+        canon: dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            import httpx
+        except ImportError as exc:
+            raise RuntimeError("httpx required for Anthropic adapter") from exc
+
+        schema = get_contracts().schemas_by_id[PROMPT_PACK_SCHEMA_ID]
+        system_prompt = _build_prompt_engineer_system_prompt()
+        user_prompt = _build_prompt_pack_prompt(canon)
+
+        payload: dict[str, Any] = {
+            "model": self.config.model or "claude-sonnet-4-20250514",
+            "max_tokens": max(1400, self.config.max_output_tokens),
+            "system": [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            "messages": [{"role": "user", "content": user_prompt}],
+            "temperature": self.config.temperature,
+            "tools": [
+                {
+                    "name": "submit_prompt_pack",
+                    "description": "Submit the PromptPack as structured JSON",
+                    "input_schema": schema,
+                }
+            ],
+            "tool_choice": {"type": "tool", "name": "submit_prompt_pack"},
+            "metadata": {"match_seed": match_seed, "team_id": team_id, "purpose": "prompt_pack"},
+        }
+
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
+            "content-type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        tool_use_block = next(
+            (block for block in data["content"] if block["type"] == "tool_use"),
+            None,
+        )
+        if not tool_use_block:
+            raise RuntimeError("Anthropic did not return tool_use block")
+
+        return tool_use_block["input"]
+
 
 def _build_system_prompt(challenge: Challenge, initial_canon: dict[str, Any]) -> str:
     return f"""You are a worldbuilding debate agent on a team of 4 agents (Architect, Lorekeeper, Contrarian, Synthesizer).
@@ -211,3 +275,28 @@ Fix these errors in your next response."""
     prompt += "\n\nUse the submit_turn tool now."
 
     return prompt
+
+
+def _build_prompt_engineer_system_prompt() -> str:
+    return """You are a neutral Prompt Engineer.
+
+Convert a final world canon/spec into a PromptPack for image generation.
+
+Constraints:
+- Do not mention teams, debates, or voting.
+- Keep the world’s governing logic visible in every prompt.
+- Prompts must be richly visual: environment, composition, lighting, materials, mood.
+- Each prompt must stand alone with enough detail for image generation.
+- Use the submit_prompt_pack tool to respond."""
+
+
+def _build_prompt_pack_prompt(canon: dict[str, Any]) -> str:
+    return f"""Generate a PromptPack from this final canon (JSON):
+{json.dumps(canon, indent=2)}
+
+Aspect ratios:
+- hero_image: 16:9
+- landmark_triptych: 1:1
+- inhabitant_portrait: 3:4
+- tension_snapshot: 16:9
+"""

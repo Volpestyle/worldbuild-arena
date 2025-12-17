@@ -461,12 +461,26 @@ Anthropic's API is stateless, so we:
 - Use `cache_control: {"type": "ephemeral"}` on system prompt for prompt caching
 - Use tool_use with forced tool choice for structured output
 
+**Gemini: App-managed state** — Similar to Anthropic, stores conversation locally:
+
+```
+start_conversation() → stores system instruction + schema in handle
+generate_turn() → sends full contents[] array with systemInstruction
+```
+
+Gemini's Generative Language API is stateless, so we:
+- Store conversation history in `ConversationHandle.data["contents"]`
+- Resend full contents array each call
+- Use `responseMimeType: "application/json"` + `responseSchema` for structured output
+- Note: Context caching via `cachedContent` resources is available but not yet implemented
+
 ### Token comparison
 
 | Provider | Strategy | Tokens per late-game call | Cost optimization |
 |----------|----------|---------------------------|-------------------|
 | OpenAI | Response chaining | ~500-1,000 | Provider remembers context |
 | Anthropic | App-managed + cache | ~2,000-4,000 | Prompt caching reduces cost by ~90% on cached prefix |
+| Gemini | App-managed | ~2,000-4,000 | Context caching available (not yet implemented) |
 | Mock | N/A | 0 | For testing only |
 
 ### Tradeoffs by provider
@@ -478,6 +492,10 @@ Anthropic's API is stateless, so we:
 **Anthropic:**
 - Pro: Full control over conversation state
 - Con: More bytes over the wire (mitigated by prompt caching)
+
+**Gemini:**
+- Pro: Native JSON schema support, generous free tier
+- Con: Requires schema conversion from JSON Schema to Gemini format
 
 ### Alternative approaches (not chosen)
 
@@ -568,9 +586,9 @@ apps/web/                     # React/TS UI (event replay)
 
 ## 14. Key engineering principles for this project
 
-1. **Adapter pattern for providers.** Each provider uses its optimal strategy (OpenAI: response chaining, Anthropic: app-managed + prompt caching). The engine doesn't know the difference.
-2. **Every agent output must be structured JSON** (not freeform prose). OpenAI uses `json_schema`, Anthropic uses `tool_use` with forced choice.
+1. **Adapter pattern for providers.** Each provider uses its optimal strategy (OpenAI: response chaining, Anthropic/Gemini: app-managed + caching). The engine doesn't know the difference.
+2. **Every agent output must be structured JSON** (not freeform prose). OpenAI uses `json_schema`, Anthropic uses `tool_use`, Gemini uses `responseSchema`.
 3. **Validators enforce the game rules**, not prompts alone. The provider can't guarantee discourse rules; we validate after each turn.
 4. **Deterministic orchestration** beats "emergent coordination" (especially for fairness). Turn order is fixed by the FSM scheduler.
 5. **Neutral PromptEngineer** is a separate agent + schema, not a hand-edited step.
-6. **Optimize for token cost per provider.** OpenAI: response chaining. Anthropic: prompt caching. Both reduce costs significantly vs. naive resending.
+6. **Optimize for token cost per provider.** OpenAI: response chaining. Anthropic: prompt caching. Gemini: context caching (planned). All reduce costs vs. naive resending.

@@ -59,6 +59,20 @@ class SQLiteEventStore:
                 """
             )
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_match_seq ON events(match_id, seq)")
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS judge_scores (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  match_id TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  judge TEXT NOT NULL,
+                  blind_id TEXT NOT NULL,
+                  scores_json TEXT NOT NULL,
+                  notes TEXT
+                )
+                """
+            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_judge_scores_match ON judge_scores(match_id)")
 
     def create_match(self, *, match_id: str, created_at: str, seed: int, tier: int) -> None:
         with self._lock, self._conn:
@@ -137,3 +151,45 @@ class SQLiteEventStore:
             error=row["error"],
         )
 
+    def add_judging_score(
+        self,
+        *,
+        match_id: str,
+        created_at: str,
+        judge: str,
+        blind_id: str,
+        scores: dict[str, Any],
+        notes: str | None,
+    ) -> int:
+        with self._lock, self._conn:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO judge_scores(match_id, created_at, judge, blind_id, scores_json, notes)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (match_id, created_at, judge, blind_id, json.dumps(scores, ensure_ascii=False), notes),
+            )
+            return int(cursor.lastrowid)
+
+    def list_judging_scores(self, *, match_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT id, created_at, judge, blind_id, scores_json, notes
+                FROM judge_scores
+                WHERE match_id = ?
+                ORDER BY created_at ASC
+                """,
+                (match_id,),
+            ).fetchall()
+        return [
+            {
+                "id": int(row["id"]),
+                "created_at": row["created_at"],
+                "judge": row["judge"],
+                "blind_id": row["blind_id"],
+                "scores": json.loads(row["scores_json"]),
+                "notes": row["notes"],
+            }
+            for row in rows
+        ]

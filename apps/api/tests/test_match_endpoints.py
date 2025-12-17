@@ -66,12 +66,62 @@ def test_match_runs_and_streams_events(tmp_path: Path) -> None:
     assert events[-1]["type"] in ("match_completed", "match_failed")
 
     types = {event["type"] for event in events}
+    assert "canon_initialized" in types
     assert "turn_emitted" in types
     assert "canon_patch_applied" in types
+    assert "prompt_pack_generated" in types
 
     seqs = [int(event["seq"]) for event in events]
     assert seqs == list(range(1, len(seqs) + 1))
     assert all(event["match_id"] == match_id for event in events)
+
+
+def test_artifacts_and_judging_endpoints(tmp_path: Path) -> None:
+    async def run() -> None:
+        match_id, _events = await _run_match_and_collect_events(tmp_path)
+
+        db_path = tmp_path / "test.sqlite3"
+        app = create_app(db_path=db_path)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            artifacts = await client.get(f"/matches/{match_id}/artifacts")
+            artifacts.raise_for_status()
+            payload = artifacts.json()
+            assert payload["match_id"] == match_id
+            assert payload["team_a"]["canon"]
+            assert payload["team_b"]["canon"]
+            assert payload["team_a"]["prompt_pack"]
+            assert payload["team_b"]["prompt_pack"]
+
+            blind = await client.get(f"/matches/{match_id}/judging/blind")
+            blind.raise_for_status()
+            blind_payload = blind.json()
+            assert len(blind_payload["entries"]) == 2
+            assert {"WORLD-1", "WORLD-2"} == {entry["blind_id"] for entry in blind_payload["entries"]}
+
+            submit = await client.post(
+                f"/matches/{match_id}/judging/scores",
+                json={
+                    "judge": "test",
+                    "blind_id": "WORLD-1",
+                    "scores": {
+                        "internal_coherence": 4,
+                        "creative_ambition": 3,
+                        "visual_fidelity": 3,
+                        "artifact_quality": 3,
+                        "process_quality": 4,
+                    },
+                    "notes": "Solid.",
+                },
+            )
+            submit.raise_for_status()
+            assert submit.json()["judge"] == "test"
+
+            listed = await client.get(f"/matches/{match_id}/judging/scores")
+            listed.raise_for_status()
+            assert listed.json()["scores"]
+
+    asyncio.run(run())
 
 
 def test_sse_replay_after_param(tmp_path: Path) -> None:

@@ -63,6 +63,16 @@ class LLMClient(Protocol):
         """Generate a turn within an existing conversation. Returns updated handle."""
         ...
 
+    async def generate_prompt_pack(
+        self,
+        *,
+        match_seed: int,
+        team_id: TeamId,
+        canon: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Generate a PromptPack from a final validated canon/spec."""
+        ...
+
 
 class ImageClient(Protocol):
     async def generate_image(self, prompt: str, *, seed: int | None = None) -> bytes: ...

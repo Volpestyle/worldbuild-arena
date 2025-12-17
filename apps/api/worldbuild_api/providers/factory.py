@@ -49,4 +49,20 @@ def create_llm_client(config: ModelConfig | None = None) -> LLMClient:
             ),
         )
 
+    if provider == "gemini":
+        from worldbuild_api.providers.gemini import GeminiLLMClient
+
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini")
+        return GeminiLLMClient(
+            api_key=api_key,
+            config=ModelConfig(
+                provider="gemini",
+                model=model or "gemini-2.0-flash",
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            ),
+        )
+
     raise ValueError(f"Unsupported LLM provider '{provider}'.")

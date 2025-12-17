@@ -6,10 +6,12 @@
     { "$ref": "#/$defs/match_created" },
     { "$ref": "#/$defs/challenge_revealed" },
     { "$ref": "#/$defs/phase_started" },
+    { "$ref": "#/$defs/canon_initialized" },
     { "$ref": "#/$defs/turn_emitted" },
     { "$ref": "#/$defs/turn_validation_failed" },
     { "$ref": "#/$defs/vote_result" },
     { "$ref": "#/$defs/canon_patch_applied" },
+    { "$ref": "#/$defs/prompt_pack_generated" },
     { "$ref": "#/$defs/match_completed" },
     { "$ref": "#/$defs/match_failed" }
   ],
@@ -86,6 +88,26 @@
               "properties": {
                 "phase": { "type": "integer", "minimum": 0, "maximum": 6 },
                 "round_count": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "canon_initialized": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "canon_initialized" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["canon", "canon_hash"],
+              "properties": {
+                "canon": { "$ref": "https://worldbuild-arena.dev/schemas/canon.schema.json" },
+                "canon_hash": { "type": "string", "minLength": 1 }
               }
             }
           }
@@ -196,6 +218,27 @@
                 "patch": { "$ref": "https://worldbuild-arena.dev/schemas/json-patch.schema.json" },
                 "canon_before_hash": { "type": "string", "minLength": 1 },
                 "canon_after_hash": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "prompt_pack_generated": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "team_id": { "type": "string", "enum": ["A", "B"] },
+            "type": { "const": "prompt_pack_generated" },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["prompt_pack"],
+              "properties": {
+                "prompt_pack": {
+                  "$ref": "https://worldbuild-arena.dev/schemas/prompt-pack.schema.json"
+                }
               }
             }
           }
